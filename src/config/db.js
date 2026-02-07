@@ -9,9 +9,10 @@ const pool = new Pool({
   ssl: {
     rejectUnauthorized: false,
   },
-  max: 10,                 // safe pool size for free tier
+  max: 10,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 5000,
+  family: 4 // FORCE IPV4
 });
 
 /* =========================
@@ -23,12 +24,11 @@ const pool = new Pool({
     console.log("✅ PostgreSQL Connected (Supabase)");
   } catch (err) {
     console.error("❌ PostgreSQL Connection Error:", err.message);
-    // DO NOT process.exit in production
   }
 })();
 
 /* =========================
-   GLOBAL ERROR HANDLING
+   GLOBAL POOL ERROR HANDLER
 ========================= */
 pool.on("error", (err) => {
   console.error("Unexpected PG Pool Error:", err.message);

@@ -1,13 +1,15 @@
 /* =========================
-   FORCE IPV4 (CRITICAL FIX)
+   FORCE IPV4 (VERY TOP)
 ========================= */
 const dns = require("dns");
 dns.setDefaultResultOrder("ipv4first");
 
 /* =========================
-   LOAD ENV
+   LOAD ENV (DEV ONLY)
 ========================= */
-require("dotenv").config();
+if (process.env.NODE_ENV !== "production") {
+  require("dotenv").config();
+}
 
 const express = require("express");
 const app = express();
@@ -76,7 +78,7 @@ app.use((req, res) => {
 });
 
 /* =========================
-   GLOBAL ERROR HANDLER
+   GLOBAL ERROR HANDLING
 ========================= */
 process.on("unhandledRejection", (err) => {
   console.error("Unhandled Rejection:", err);
