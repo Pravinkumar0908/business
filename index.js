@@ -1,7 +1,17 @@
-const express = require("express");
+/* =========================
+   FORCE IPV4 (CRITICAL FIX)
+========================= */
+const dns = require("dns");
+dns.setDefaultResultOrder("ipv4first");
+
+/* =========================
+   LOAD ENV
+========================= */
 require("dotenv").config();
 
+const express = require("express");
 const app = express();
+
 app.use(express.json());
 
 /* =========================
@@ -12,7 +22,14 @@ app.use((req, res, next) => {
   next();
 });
 
+/* =========================
+   DATABASE INIT
+========================= */
+require("./src/config/db");
 
+/* =========================
+   AUTH MIDDLEWARE
+========================= */
 const authMiddleware = require("./src/middleware/authMiddleware");
 
 app.get("/api/protected", authMiddleware, (req, res) => {
@@ -21,11 +38,6 @@ app.get("/api/protected", authMiddleware, (req, res) => {
     user: req.user
   });
 });
-
-/* =========================
-   DATABASE INIT
-========================= */
-require("./src/config/db");
 
 /* =========================
    ROOT ROUTE
@@ -49,12 +61,9 @@ app.use("/api/dashboard", require("./src/routes/dashboardRoutes"));
 app.use("/api/sales", require("./src/routes/saleRoutes"));
 app.use("/api/appointments", require("./src/routes/appointmentRoutes"));
 app.use("/api/invoices", require("./src/routes/invoiceRoutes"));
-app.use("/api/dashboard", require("./src/routes/dashboardRoutes"));
 app.use("/api/plans", require("./src/routes/planRoutes"));
 app.use("/api/subscriptions", require("./src/routes/subscriptionRoutes"));
 app.use("/api/admin", require("./src/routes/adminRoutes"));
-
-
 
 /* =========================
    404 HANDLER
@@ -64,6 +73,17 @@ app.use((req, res) => {
     success: false,
     message: `Route Not Found: ${req.method} ${req.originalUrl}`,
   });
+});
+
+/* =========================
+   GLOBAL ERROR HANDLER
+========================= */
+process.on("unhandledRejection", (err) => {
+  console.error("Unhandled Rejection:", err);
+});
+
+process.on("uncaughtException", (err) => {
+  console.error("Uncaught Exception:", err);
 });
 
 /* =========================
