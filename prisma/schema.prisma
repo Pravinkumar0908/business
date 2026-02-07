@@ -1,0 +1,179 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+//////////////////////////
+// SALON
+//////////////////////////
+
+model Salon {
+  id        String   @id @default(uuid())
+  name      String
+  city      String
+  createdAt DateTime @default(now())
+
+  users     User[]
+  staff     Staff[]
+  services  Service[]
+  sales     Sale[]
+  payrolls  Payroll[]
+  expenses  Expense[]   // 🔥 FIX ADDED HERE
+  counter   Counter?
+
+}
+
+//////////////////////////
+// USER
+//////////////////////////
+
+model User {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      String
+  salonId   String
+
+  salon     Salon    @relation(fields: [salonId], references: [id])
+}
+
+//////////////////////////
+// STAFF
+//////////////////////////
+
+model Staff {
+  id               String   @id @default(uuid())
+  name             String
+  commissionType   String
+  commissionValue  Float
+  baseSalary       Float?
+  salonId          String
+
+  salon     Salon      @relation(fields: [salonId], references: [id])
+  items     SaleItem[]
+  payrolls  Payroll[]
+
+  @@index([salonId])
+}
+
+//////////////////////////
+// SERVICE
+//////////////////////////
+
+model Service {
+  id        String   @id @default(uuid())
+  name      String
+  price     Float
+  costPrice Float?
+  salonId   String
+
+  salon   Salon      @relation(fields: [salonId], references: [id])
+  items   SaleItem[]
+
+  @@index([salonId])
+}
+
+//////////////////////////
+// SALE
+//////////////////////////
+
+model Sale {
+  id            String     @id @default(uuid())
+  invoiceNo     String
+  salonId       String
+  date          DateTime   @default(now())
+  subtotal      Float
+  taxAmount     Float
+  discount      Float      @default(0)
+  totalAmount   Float
+  paymentMode   String
+  paymentStatus String     @default("paid")
+
+  salon   Salon      @relation(fields: [salonId], references: [id])
+  items   SaleItem[]
+
+  @@index([salonId])
+  @@unique([salonId, invoiceNo])
+}
+
+//////////////////////////
+// SALE ITEM
+//////////////////////////
+
+model SaleItem {
+  id         String   @id @default(uuid())
+  saleId     String
+  serviceId  String
+  staffId    String
+  price      Float
+  commission Float
+  quantity   Int      @default(1)
+
+  sale    Sale    @relation(fields: [saleId], references: [id])
+  service Service @relation(fields: [serviceId], references: [id])
+  staff   Staff   @relation(fields: [staffId], references: [id])
+
+  @@index([saleId])
+  @@index([staffId])
+}
+
+//////////////////////////
+// PAYROLL
+//////////////////////////
+
+model Payroll {
+  id              String   @id @default(uuid())
+  salonId         String
+  staffId         String
+  month           Int
+  year            Int
+
+  totalServices   Int
+  totalRevenue    Float
+  totalCommission Float
+
+  baseSalary      Float
+  bonus           Float     @default(0)
+  deductions      Float     @default(0)
+  finalPayable    Float
+
+  paymentStatus   String    @default("pending")
+  paidAmount      Float     @default(0)
+
+  createdAt       DateTime  @default(now())
+
+  salon   Salon  @relation(fields: [salonId], references: [id])
+  staff   Staff  @relation(fields: [staffId], references: [id])
+
+  @@unique([salonId, staffId, month, year])
+  @@index([salonId])
+}
+
+//////////////////////////
+// EXPENSE
+//////////////////////////
+
+model Expense {
+  id        String   @id @default(uuid())
+  salonId   String
+  title     String
+  amount    Float
+  category  String
+  date      DateTime @default(now())
+
+  salon     Salon    @relation(fields: [salonId], references: [id])
+
+  @@index([salonId])
+}
+model Counter {
+  id        String  @id @default(uuid())
+  salonId   String  @unique
+  saleCount Int     @default(0)
+
+  salon     Salon   @relation(fields: [salonId], references: [id])
+}
