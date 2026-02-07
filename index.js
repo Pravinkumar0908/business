@@ -1,8 +1,22 @@
 /* =========================
-   FORCE IPV4 (VERY TOP)
+   FORCE IPV4 (VERY TOP - BEFORE EVERYTHING)
 ========================= */
 const dns = require("dns");
 dns.setDefaultResultOrder("ipv4first");
+
+// Aggressive IPv4 override - forces ALL DNS lookups to IPv4 only
+const origLookup = dns.lookup;
+dns.lookup = function (hostname, options, callback) {
+  if (typeof options === "function") {
+    callback = options;
+    options = { family: 4 };
+  } else if (typeof options === "number") {
+    options = { family: 4 };
+  } else {
+    options = Object.assign({}, options, { family: 4 });
+  }
+  return origLookup.call(this, hostname, options, callback);
+};
 
 /* =========================
    LOAD ENV (DEV ONLY)
@@ -37,7 +51,7 @@ const authMiddleware = require("./src/middleware/authMiddleware");
 app.get("/api/protected", authMiddleware, (req, res) => {
   res.json({
     message: "Protected route working",
-    user: req.user
+    user: req.user,
   });
 });
 
