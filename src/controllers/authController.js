@@ -1,27 +1,7 @@
-const prisma = require("../config/db");
+const pool = require("../config/db");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const { v4: uuidv4 } = require("uuid");
-
-// Retry mechanism for PgBouncer transient errors
-async function retryPrismaOp(operation, maxRetries = 3) {
-  let lastError;
-  for (let i = 0; i < maxRetries; i++) {
-    try {
-      return await operation();
-    } catch (err) {
-      lastError = err;
-      // Check if it's a transient PgBouncer error
-      if (err.code === "P2025" || err.message?.includes("prepared statement")) {
-        console.log(`PgBouncer error, retry ${i + 1}/${maxRetries}`);
-        await new Promise(resolve => setTimeout(resolve, Math.pow(2, i) * 100)); // Exponential backoff
-        continue;
-      }
-      throw err;
-    }
-  }
-  throw lastError;
-}
 
 exports.register = async (req, res) => {
   try {
@@ -31,12 +11,12 @@ exports.register = async (req, res) => {
       return res.status(400).json({ message: "All fields required" });
     }
 
-    // Use raw SQL to avoid PgBouncer prepared statement issues
-    const existing = await prisma.$queryRaw`
-      SELECT * FROM "User" WHERE email = ${email} LIMIT 1
-    `;
+    const { rows: existing } = await pool.query(
+      'SELECT id FROM "User" WHERE email = $1 LIMIT 1',
+      [email]
+    );
 
-    if (existing && existing.length > 0) {
+    if (existing.length > 0) {
       return res.status(400).json({ message: "User already exists" });
     }
 
@@ -45,16 +25,16 @@ exports.register = async (req, res) => {
     const userId = uuidv4();
 
     // Create salon
-    await prisma.$executeRaw`
-      INSERT INTO "Salon" (id, name, city, "createdAt") 
-      VALUES (${salonId}, ${name}, 'Unknown', NOW())
-    `;
+    await pool.query(
+      'INSERT INTO "Salon" (id, name, city, "createdAt") VALUES ($1, $2, $3, NOW())',
+      [salonId, name, "Unknown"]
+    );
 
     // Create user
-    await prisma.$executeRaw`
-      INSERT INTO "User" (id, name, email, password, role, "salonId") 
-      VALUES (${userId}, ${name}, ${email}, ${hashedPassword}, 'owner', ${salonId})
-    `;
+    await pool.query(
+      'INSERT INTO "User" (id, name, email, password, role, "salonId") VALUES ($1, $2, $3, $4, $5, $6)',
+      [userId, name, email, hashedPassword, "owner", salonId]
+    );
 
     const token = jwt.sign(
       { userId },
@@ -64,7 +44,8 @@ exports.register = async (req, res) => {
 
     res.status(201).json({
       message: "Registration successful",
-      token
+      token,
+      user: { id: userId, name, email }
     });
 
   } catch (err) {
@@ -83,28 +64,17 @@ exports.login = async (req, res) => {
 
     console.log("🔐 LOGIN: Looking up user with email:", email);
 
-    // Use raw SQL query with retry mechanism for PgBouncer compatibility
-    let user;
-    try {
-      const users = await retryPrismaOp(async () => {
-        return await prisma.$queryRaw`
-          SELECT id, password FROM "User" WHERE email = ${email} LIMIT 1
-        `;
-      });
-      
-      if (users && users.length > 0) {
-        user = users[0];
-      }
-    } catch (err) {
-      console.error("❌ LOGIN: Database query failed:", err.message);
-      return res.status(500).json({ message: "Server error" });
-    }
+    const { rows } = await pool.query(
+      'SELECT id, name, password FROM "User" WHERE email = $1 LIMIT 1',
+      [email]
+    );
 
-    if (!user) {
+    if (rows.length === 0) {
       console.log("❌ LOGIN: User not found for email:", email);
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
+    const user = rows[0];
     console.log("✅ LOGIN: User found, checking password");
 
     const match = await bcrypt.compare(password, user.password);
@@ -127,7 +97,7 @@ exports.login = async (req, res) => {
     res.json({
       message: "Login successful",
       token,
-      user: { id: user.id }
+      user: { id: user.id, name: user.name, email }
     });
 
   } catch (err) {

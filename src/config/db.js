@@ -1,16 +1,19 @@
-const { PrismaClient } = require("@prisma/client");
+// ✅ PURE pg Pool — NO Prisma for queries
+// Prisma uses prepared statements which PgBouncer kills.
+// pg Pool with { name: undefined } uses UNNAMED statements → PgBouncer safe.
+const { Pool } = require("pg");
 
-const prisma = new PrismaClient();
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false },
+  max: 5,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 10000,
+});
 
 // Test connection
-(async () => {
-  try {
-    await prisma.$queryRaw`SELECT 1`;
-    console.log("✅ Database Connected");
-    console.log("✅ Tables Ready");
-  } catch (error) {
-    console.error("❌ Database Error:", error);
-  }
-})();
+pool.query("SELECT 1")
+  .then(() => console.log("✅ Database Connected (pg Pool — PgBouncer safe)"))
+  .catch((err) => console.error("❌ Database Error:", err.message));
 
-module.exports = prisma;
+module.exports = pool;
