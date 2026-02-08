@@ -18,12 +18,14 @@ router.get("/", auth, async (req, res) => {
 // POST create service
 router.post("/", auth, async (req, res) => {
   try {
-    const { name, price, duration } = req.body;
+    const { name, price, duration, description } = req.body;
     const service = await prisma.service.create({
       data: {
         id: require("uuid").v4(),
         name,
         price: price || 0,
+        duration: duration || 0,
+        description: description || null,
         salonId: req.salonId
       }
     });
@@ -36,10 +38,10 @@ router.post("/", auth, async (req, res) => {
 // PUT update service
 router.put("/:id", auth, async (req, res) => {
   try {
-    const { name, price } = req.body;
+    const { name, price, duration, description } = req.body;
     const service = await prisma.service.update({
       where: { id: req.params.id },
-      data: { name, price }
+      data: { name, price, duration, description }
     });
     res.json({ service });
   } catch (err) {

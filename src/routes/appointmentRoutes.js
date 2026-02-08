@@ -1,15 +1,16 @@
 const express = require("express");
 const router = express.Router();
 const auth = require("../middleware/authMiddleware");
-const pool = require("../config/db");
+const prisma = require("../config/db");
+const { v4: uuidv4 } = require("uuid");
 
 router.get("/", auth, async (req, res) => {
   try {
-    const result = await pool.query(
-      "SELECT * FROM appointments WHERE user_id = $1 ORDER BY date DESC, time DESC",
-      [req.userId]
-    );
-    res.json({ appointments: result.rows });
+    const appointments = await prisma.appointment.findMany({
+      where: { salonId: req.salonId },
+      orderBy: { date: "desc" }
+    });
+    res.json({ appointments });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -18,11 +19,21 @@ router.get("/", auth, async (req, res) => {
 router.post("/", auth, async (req, res) => {
   try {
     const { customer_name, customer_phone, service_id, staff_id, date, time, status, notes } = req.body;
-    const result = await pool.query(
-      "INSERT INTO appointments (user_id, customer_name, customer_phone, service_id, staff_id, date, time, status, notes) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *",
-      [req.userId, customer_name, customer_phone, service_id, staff_id, date, time, status || 'pending', notes]
-    );
-    res.status(201).json({ appointment: result.rows[0] });
+    const appointment = await prisma.appointment.create({
+      data: {
+        id: uuidv4(),
+        customerName: customer_name || "",
+        customerPhone: customer_phone || null,
+        serviceId: service_id || null,
+        staffId: staff_id || null,
+        date: date ? new Date(date) : new Date(),
+        time: time || null,
+        status: status || "pending",
+        notes: notes || null,
+        salonId: req.salonId
+      }
+    });
+    res.status(201).json({ appointment });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -31,11 +42,20 @@ router.post("/", auth, async (req, res) => {
 router.put("/:id", auth, async (req, res) => {
   try {
     const { customer_name, customer_phone, service_id, staff_id, date, time, status, notes } = req.body;
-    const result = await pool.query(
-      "UPDATE appointments SET customer_name=$1, customer_phone=$2, service_id=$3, staff_id=$4, date=$5, time=$6, status=$7, notes=$8 WHERE id=$9 AND user_id=$10 RETURNING *",
-      [customer_name, customer_phone, service_id, staff_id, date, time, status, notes, req.params.id, req.userId]
-    );
-    res.json({ appointment: result.rows[0] });
+    const appointment = await prisma.appointment.update({
+      where: { id: req.params.id },
+      data: {
+        customerName: customer_name,
+        customerPhone: customer_phone,
+        serviceId: service_id,
+        staffId: staff_id,
+        date: date ? new Date(date) : undefined,
+        time,
+        status,
+        notes
+      }
+    });
+    res.json({ appointment });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -43,10 +63,7 @@ router.put("/:id", auth, async (req, res) => {
 
 router.delete("/:id", auth, async (req, res) => {
   try {
-    await pool.query(
-      "DELETE FROM appointments WHERE id=$1 AND user_id=$2",
-      [req.params.id, req.userId]
-    );
+    await prisma.appointment.delete({ where: { id: req.params.id } });
     res.json({ message: "Appointment deleted" });
   } catch (err) {
     res.status(500).json({ message: err.message });

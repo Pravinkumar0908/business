@@ -3,8 +3,9 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 //////////////////////////
@@ -17,13 +18,15 @@ model Salon {
   city      String
   createdAt DateTime @default(now())
 
-  users     User[]
-  staff     Staff[]
-  services  Service[]
-  sales     Sale[]
-  payrolls  Payroll[]
-  expenses  Expense[]   // 🔥 FIX ADDED HERE
-  counter   Counter?
+  users        User[]
+  staff        Staff[]
+  services     Service[]
+  sales        Sale[]
+  payrolls     Payroll[]
+  expenses     Expense[]
+  appointments Appointment[]
+  invoices     Invoice[]
+  counter      Counter?
 
 }
 
@@ -66,11 +69,13 @@ model Staff {
 //////////////////////////
 
 model Service {
-  id        String   @id @default(uuid())
-  name      String
-  price     Float
-  costPrice Float?
-  salonId   String
+  id          String   @id @default(uuid())
+  name        String
+  price       Float
+  costPrice   Float?
+  duration    Int?
+  description String?
+  salonId     String
 
   salon   Salon      @relation(fields: [salonId], references: [id])
   items   SaleItem[]
@@ -176,4 +181,46 @@ model Counter {
   saleCount Int     @default(0)
 
   salon     Salon   @relation(fields: [salonId], references: [id])
+}
+
+//////////////////////////
+// APPOINTMENT
+//////////////////////////
+
+model Appointment {
+  id            String   @id @default(uuid())
+  salonId       String
+  customerName  String
+  customerPhone String?
+  serviceId     String?
+  staffId       String?
+  date          DateTime
+  time          String?
+  status        String   @default("pending")
+  notes         String?
+  createdAt     DateTime @default(now())
+
+  salon         Salon    @relation(fields: [salonId], references: [id])
+
+  @@index([salonId])
+}
+
+//////////////////////////
+// INVOICE
+//////////////////////////
+
+model Invoice {
+  id            String   @id @default(uuid())
+  salonId       String
+  customerName  String
+  customerPhone String?
+  items         String?
+  total         Float    @default(0)
+  status        String   @default("unpaid")
+  date          DateTime @default(now())
+  createdAt     DateTime @default(now())
+
+  salon         Salon    @relation(fields: [salonId], references: [id])
+
+  @@index([salonId])
 }
