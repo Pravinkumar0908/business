@@ -5,7 +5,7 @@ const { v4: uuidv4 } = require("uuid");
 
 exports.register = async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password, businessType, organizationName } = req.body;
 
     if (!name || !email || !password) {
       return res.status(400).json({ message: "All fields required" });
@@ -24,10 +24,12 @@ exports.register = async (req, res) => {
     const salonId = uuidv4();
     const userId = uuidv4();
 
-    // Create salon
+    // Create salon/business
+    const bizType = (businessType || 'salon').toLowerCase();
+    const bizName = organizationName || name;
     await pool.query(
-      'INSERT INTO "Salon" (id, name, city, "createdAt") VALUES ($1, $2, $3, NOW())',
-      [salonId, name, "Unknown"]
+      'INSERT INTO "Salon" (id, name, city, "businessType", "createdAt") VALUES ($1, $2, $3, $4, NOW())',
+      [salonId, bizName, "Unknown", bizType]
     );
 
     // Create user
@@ -45,7 +47,7 @@ exports.register = async (req, res) => {
     res.status(201).json({
       message: "Registration successful",
       token,
-      user: { id: userId, name, email }
+      user: { id: userId, name, email, businessType: bizType }
     });
 
   } catch (err) {
@@ -65,7 +67,7 @@ exports.login = async (req, res) => {
     console.log("🔐 LOGIN: Looking up user with email:", email);
 
     const { rows } = await pool.query(
-      'SELECT id, name, password FROM "User" WHERE email = $1 LIMIT 1',
+      'SELECT u.id, u.name, u.password, u."salonId", s."businessType" FROM "User" u LEFT JOIN "Salon" s ON u."salonId" = s.id WHERE u.email = $1 LIMIT 1',
       [email]
     );
 
@@ -97,7 +99,7 @@ exports.login = async (req, res) => {
     res.json({
       message: "Login successful",
       token,
-      user: { id: user.id, name: user.name, email }
+      user: { id: user.id, name: user.name, email, businessType: user.businessType || 'salon' }
     });
 
   } catch (err) {

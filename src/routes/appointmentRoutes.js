@@ -7,7 +7,14 @@ const { v4: uuidv4 } = require("uuid");
 router.get("/", auth, async (req, res) => {
   try {
     const { rows } = await pool.query(
-      'SELECT * FROM "Appointment" WHERE "salonId" = $1 ORDER BY date DESC',
+      `SELECT a.*, 
+        s.name as "serviceName", s.price as "servicePrice", s.duration as "serviceDuration",
+        st.name as "staffName"
+      FROM "Appointment" a
+      LEFT JOIN "Service" s ON a."serviceId" = s.id
+      LEFT JOIN "Staff" st ON a."staffId" = st.id
+      WHERE a."salonId" = $1 
+      ORDER BY a.date DESC`,
       [req.salonId]
     );
     res.json({ appointments: rows });
