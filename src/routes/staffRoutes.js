@@ -17,11 +17,12 @@ router.get("/", auth, async (req, res) => {
 
 router.post("/", auth, async (req, res) => {
   try {
-    const { name, commissionType, commissionValue, baseSalary } = req.body;
+    const { name, phone, commissionType, commissionValue, baseSalary } = req.body;
     const staff = await prisma.staff.create({
       data: {
         id: uuidv4(),
         name,
+        phone: phone || null,
         commissionType: commissionType || "percentage",
         commissionValue: commissionValue || 0,
         baseSalary: baseSalary || 0,
@@ -36,10 +37,10 @@ router.post("/", auth, async (req, res) => {
 
 router.put("/:id", auth, async (req, res) => {
   try {
-    const { name, commissionType, commissionValue, baseSalary } = req.body;
+    const { name, phone, commissionType, commissionValue, baseSalary } = req.body;
     const staff = await prisma.staff.update({
       where: { id: req.params.id },
-      data: { name, commissionType, commissionValue, baseSalary }
+      data: { name, phone, commissionType, commissionValue, baseSalary }
     });
     res.json({ staff });
   } catch (err) {

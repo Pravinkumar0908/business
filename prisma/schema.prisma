@@ -52,6 +52,7 @@ model User {
 model Staff {
   id               String   @id @default(uuid())
   name             String
+  phone            String?
   commissionType   String
   commissionValue  Float
   baseSalary       Float?
