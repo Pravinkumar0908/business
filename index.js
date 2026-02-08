@@ -20,8 +20,14 @@ app.get("/health", (req, res) => {
   res.json({ status: "OK" });
 });
 
-// Auth Routes
+// ✅ ALL ROUTES
 app.use("/api/auth", require("./src/routes/authRoutes"));
+app.use("/api/services", require("./src/routes/serviceRoutes"));
+app.use("/api/staff", require("./src/routes/staffRoutes"));
+app.use("/api/appointments", require("./src/routes/appointmentRoutes"));
+app.use("/api/invoices", require("./src/routes/invoiceRoutes"));
+app.use("/api/expenses", require("./src/routes/expenseRoutes"));
+app.use("/api/dashboard", require("./src/routes/dashboardRoutes"));
 
 // 404
 app.use((req, res) => {
