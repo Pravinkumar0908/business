@@ -7,8 +7,8 @@ const pool = require("../config/db");
 router.get("/", auth, async (req, res) => {
   try {
     const result = await pool.query(
-      "SELECT * FROM services WHERE user_id = $1 ORDER BY created_at DESC",
-      [req.userId]
+      "SELECT * FROM \"Service\" WHERE \"salonId\" = $1 ORDER BY id DESC",
+      [req.salonId]
     );
     res.json({ services: result.rows });
   } catch (err) {
@@ -21,8 +21,8 @@ router.post("/", auth, async (req, res) => {
   try {
     const { name, price, duration, description } = req.body;
     const result = await pool.query(
-      "INSERT INTO services (user_id, name, price, duration, description) VALUES ($1,$2,$3,$4,$5) RETURNING *",
-      [req.userId, name, price || 0, duration || 30, description]
+      "INSERT INTO \"Service\" (id, name, price, \"salonId\") VALUES (gen_random_uuid(), $1, $2, $3) RETURNING *",
+      [name, price || 0, req.salonId]
     );
     res.status(201).json({ service: result.rows[0] });
   } catch (err) {
@@ -35,8 +35,8 @@ router.put("/:id", auth, async (req, res) => {
   try {
     const { name, price, duration, description } = req.body;
     const result = await pool.query(
-      "UPDATE services SET name=$1, price=$2, duration=$3, description=$4 WHERE id=$5 AND user_id=$6 RETURNING *",
-      [name, price, duration, description, req.params.id, req.userId]
+      "UPDATE \"Service\" SET name=$1, price=$2 WHERE id=$3 AND \"salonId\"=$4 RETURNING *",
+      [name, price, req.params.id, req.salonId]
     );
     if (result.rows.length === 0) {
       return res.status(404).json({ message: "Service not found" });
@@ -51,8 +51,8 @@ router.put("/:id", auth, async (req, res) => {
 router.delete("/:id", auth, async (req, res) => {
   try {
     await pool.query(
-      "DELETE FROM services WHERE id=$1 AND user_id=$2",
-      [req.params.id, req.userId]
+      "DELETE FROM \"Service\" WHERE id=$1 AND \"salonId\"=$2",
+      [req.params.id, req.salonId]
     );
     res.json({ message: "Service deleted" });
   } catch (err) {

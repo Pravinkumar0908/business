@@ -12,7 +12,7 @@ exports.register = async (req, res) => {
     }
 
     const existing = await pool.query(
-      "SELECT id FROM users WHERE email = $1",
+      "SELECT id FROM \"User\" WHERE email = $1",
       [email]
     );
 
@@ -21,13 +21,19 @@ exports.register = async (req, res) => {
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
-
     const userId = uuidv4();
+    const salonId = uuidv4(); // Create a new salon for each user
 
+    // Create salon
     await pool.query(
-      `INSERT INTO users (id, name, email, password)
-       VALUES ($1, $2, $3, $4)`,
-      [userId, name, email, hashedPassword]
+      "INSERT INTO \"Salon\" (id, name, city) VALUES ($1, $2, $3)",
+      [salonId, name, "Unknown"]
+    );
+
+    // Create user with salonId
+    await pool.query(
+      "INSERT INTO \"User\" (id, name, email, password, role, \"salonId\") VALUES ($1, $2, $3, $4, $5, $6)",
+      [userId, name, email, hashedPassword, "owner", salonId]
     );
 
     const token = jwt.sign(
@@ -56,7 +62,7 @@ exports.login = async (req, res) => {
     }
 
     const result = await pool.query(
-      "SELECT * FROM users WHERE email = $1",
+      "SELECT * FROM \"User\" WHERE email = $1",
       [email]
     );
 
