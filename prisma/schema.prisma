@@ -29,6 +29,10 @@ model Salon {
   invoices     Invoice[]
   counter      Counter?
 
+  // Restaurant
+  restaurantTables  RestaurantTable[]
+  menuItems         MenuItem[]
+  restaurantOrders  RestaurantOrder[]
 }
 
 //////////////////////////
@@ -205,6 +209,100 @@ model Appointment {
   salon         Salon    @relation(fields: [salonId], references: [id])
 
   @@index([salonId])
+}
+
+//////////////////////////
+// RESTAURANT TABLE
+//////////////////////////
+
+model RestaurantTable {
+  id              String   @id @default(uuid())
+  salonId         String
+  name            String
+  seats           Int      @default(4)
+  status          String   @default("empty")   // empty, occupied, reserved, cleaning
+  currentOrderId  String?
+  customerName    String?
+  occupiedSince   DateTime?
+  createdAt       DateTime @default(now())
+
+  salon           Salon    @relation(fields: [salonId], references: [id])
+
+  @@index([salonId])
+}
+
+//////////////////////////
+// MENU ITEM
+//////////////////////////
+
+model MenuItem {
+  id          String   @id @default(uuid())
+  salonId     String
+  name        String
+  category    String   @default("Uncategorized")
+  price       Float
+  isVeg       Boolean  @default(true)
+  isAvailable Boolean  @default(true)
+  description String?
+  createdAt   DateTime @default(now())
+
+  salon       Salon    @relation(fields: [salonId], references: [id])
+  orderItems  RestaurantOrderItem[]
+
+  @@index([salonId])
+}
+
+//////////////////////////
+// RESTAURANT ORDER
+//////////////////////////
+
+model RestaurantOrder {
+  id                String   @id @default(uuid())
+  salonId           String
+  tableId           String?
+  tableName         String?
+  waiterId          String?
+  waiterName        String?
+  type              String   @default("dine_in")  // dine_in, takeaway, delivery
+  status            String   @default("Created")
+  customerCount     Int      @default(1)
+  customerName      String?
+  customerPhone     String?
+  subtotal          Float    @default(0)
+  taxRate           Float    @default(0.05)
+  serviceChargeRate Float    @default(0)
+  discountAmount    Float    @default(0)
+  cancelReason      String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  salon             Salon    @relation(fields: [salonId], references: [id])
+  items             RestaurantOrderItem[]
+
+  @@index([salonId])
+  @@index([salonId, status])
+}
+
+//////////////////////////
+// RESTAURANT ORDER ITEM
+//////////////////////////
+
+model RestaurantOrderItem {
+  id              String    @id @default(uuid())
+  orderId         String
+  menuItemId      String
+  name            String
+  price           Float
+  isVeg           Boolean   @default(true)
+  qty             Int       @default(1)
+  note            String?
+  status          String    @default("Pending")
+  statusUpdatedAt DateTime?
+
+  order           RestaurantOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  menuItem        MenuItem        @relation(fields: [menuItemId], references: [id])
+
+  @@index([orderId])
 }
 
 //////////////////////////

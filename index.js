@@ -32,6 +32,11 @@ app.use("/api/products", require("./src/routes/productRoutes"));
 app.use("/api/customers", require("./src/routes/customerRoutes"));
 app.use("/api/suppliers", require("./src/routes/supplierRoutes"));
 
+// ✅ RESTAURANT ROUTES
+app.use("/api/tables", require("./src/routes/tableRoutes"));
+app.use("/api/menu", require("./src/routes/menuRoutes"));
+app.use("/api/orders", require("./src/routes/orderRoutes"));
+
 // 404
 app.use((req, res) => {
   res.status(404).json({
