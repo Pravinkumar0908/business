@@ -3,6 +3,44 @@ const router = express.Router();
 const auth = require("../middleware/authMiddleware");
 const pool = require("../config/db");
 const { v4: uuidv4 } = require("uuid");
+const https = require("https");
+
+// ── Fetch product image from DuckDuckGo Instant Answer (free, no key) ──
+function fetchProductImage(productName) {
+  return new Promise((resolve) => {
+    const query = encodeURIComponent(productName + " product");
+    const url = `https://api.duckduckgo.com/?q=${query}&format=json&no_html=1&skip_disambig=1`;
+    https
+      .get(url, (res) => {
+        let data = "";
+        res.on("data", (chunk) => (data += chunk));
+        res.on("end", () => {
+          try {
+            const json = JSON.parse(data);
+            // Try main image → first topic icon → empty
+            const img =
+              json.Image ||
+              (json.RelatedTopics &&
+                json.RelatedTopics[0] &&
+                json.RelatedTopics[0].Icon &&
+                json.RelatedTopics[0].Icon.URL) ||
+              "";
+            // DuckDuckGo returns relative URLs sometimes
+            if (img && !img.startsWith("http")) {
+              resolve(img ? `https://duckduckgo.com${img}` : "");
+            } else {
+              resolve(img || "");
+            }
+          } catch {
+            resolve("");
+          }
+        });
+      })
+      .on("error", () => resolve(""));
+    // Timeout after 4 seconds
+    setTimeout(() => resolve(""), 4000);
+  });
+}
 
 // ── Auto-create table if not exists ──────────────────────
 const ensureTable = async () => {
@@ -22,6 +60,7 @@ const ensureTable = async () => {
       "unitType" TEXT DEFAULT 'piece',
       "trackInventory" BOOLEAN DEFAULT true,
       description TEXT DEFAULT '',
+      "imageUrl" TEXT DEFAULT '',
       "createdAt" TIMESTAMPTZ DEFAULT NOW()
     )
   `);
@@ -30,6 +69,7 @@ const ensureTable = async () => {
     'ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "productType" TEXT DEFAULT \'fixed\'',
     'ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "unitType" TEXT DEFAULT \'piece\'',
     'ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "trackInventory" BOOLEAN DEFAULT true',
+    'ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "imageUrl" TEXT DEFAULT \'\'',
   ];
   for (const sql of cols) {
     try { await pool.query(sql); } catch (e) { /* column exists */ }
@@ -61,20 +101,31 @@ router.post("/", auth, async (req, res) => {
   try {
     const {
       name, category, price, costPrice, stock, lowStockAlert,
-      barcode, unit, productType, unitType, trackInventory, description
+      barcode, unit, productType, unitType, trackInventory, description, imageUrl
     } = req.body;
     const id = uuidv4();
+
+    // Auto-fetch product image if not provided
+    let finalImageUrl = imageUrl || '';
+    if (!finalImageUrl && name) {
+      try {
+        finalImageUrl = await fetchProductImage(name);
+      } catch (e) {
+        console.log("Image fetch skipped:", e.message);
+      }
+    }
+
     const { rows } = await pool.query(
       `INSERT INTO "Product"
         (id, "salonId", name, category, price, "costPrice", stock, "lowStockAlert",
-         barcode, unit, "productType", "unitType", "trackInventory", description)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
+         barcode, unit, "productType", "unitType", "trackInventory", description, "imageUrl")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING *`,
       [
         id, req.salonId, name, category || '', price || 0, costPrice || 0,
         stock || 0, lowStockAlert || 5, barcode || '', unit || 'pcs',
         productType || 'fixed', unitType || 'piece',
         trackInventory !== undefined ? trackInventory : true,
-        description || ''
+        description || '', finalImageUrl
       ]
     );
     res.status(201).json({ product: rows[0] });
@@ -89,19 +140,19 @@ router.put("/:id", auth, async (req, res) => {
   try {
     const {
       name, category, price, costPrice, stock, lowStockAlert,
-      barcode, unit, productType, unitType, trackInventory, description
+      barcode, unit, productType, unitType, trackInventory, description, imageUrl
     } = req.body;
     const { rows } = await pool.query(
       `UPDATE "Product" SET
         name=$1, category=$2, price=$3, "costPrice"=$4, stock=$5,
         "lowStockAlert"=$6, barcode=$7, unit=$8, "productType"=$9,
-        "unitType"=$10, "trackInventory"=$11, description=$12
-       WHERE id=$13 AND "salonId"=$14 RETURNING *`,
+        "unitType"=$10, "trackInventory"=$11, description=$12, "imageUrl"=$13
+       WHERE id=$14 AND "salonId"=$15 RETURNING *`,
       [
         name, category, price, costPrice, stock, lowStockAlert,
         barcode, unit, productType || 'fixed', unitType || 'piece',
         trackInventory !== undefined ? trackInventory : true,
-        description, req.params.id, req.salonId
+        description, imageUrl || '', req.params.id, req.salonId
       ]
     );
     if (rows.length === 0) return res.status(404).json({ message: "Product not found" });
