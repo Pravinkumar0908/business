@@ -188,6 +188,36 @@ router.post("/", auth, async (req, res) => {
   }
 });
 
+// ── Image Proxy (avoids CORS issues on Flutter Web) ──
+router.get("/image-proxy", async (req, res) => {
+  try {
+    const imageUrl = req.query.url;
+    if (!imageUrl) return res.status(400).json({ message: "url parameter required" });
+
+    const stream = await httpGet(imageUrl, {
+      "User-Agent": "Mozilla/5.0 (compatible; ProductBot/1.0)",
+      "Accept": "image/*,*/*",
+    });
+
+    // Set CORS and content headers
+    res.set("Access-Control-Allow-Origin", "*");
+    res.set("Cache-Control", "public, max-age=86400"); // cache 24h
+    if (stream.headers["content-type"]) {
+      res.set("Content-Type", stream.headers["content-type"]);
+    } else {
+      res.set("Content-Type", "image/png");
+    }
+    if (stream.headers["content-length"]) {
+      res.set("Content-Length", stream.headers["content-length"]);
+    }
+
+    stream.pipe(res);
+  } catch (err) {
+    console.error("IMAGE PROXY ERROR:", err.message);
+    res.status(502).json({ message: "Failed to fetch image" });
+  }
+});
+
 // PUT update product
 router.put("/:id", auth, async (req, res) => {
   try {
@@ -261,36 +291,6 @@ router.delete("/:id", auth, async (req, res) => {
   } catch (err) {
     console.error("DELETE PRODUCT ERROR:", err.message);
     res.status(500).json({ message: err.message });
-  }
-});
-
-// ── Image Proxy (avoids CORS issues on Flutter Web) ──
-router.get("/image-proxy", async (req, res) => {
-  try {
-    const imageUrl = req.query.url;
-    if (!imageUrl) return res.status(400).json({ message: "url parameter required" });
-
-    const stream = await httpGet(imageUrl, {
-      "User-Agent": "Mozilla/5.0 (compatible; ProductBot/1.0)",
-      "Accept": "image/*,*/*",
-    });
-
-    // Set CORS and content headers
-    res.set("Access-Control-Allow-Origin", "*");
-    res.set("Cache-Control", "public, max-age=86400"); // cache 24h
-    if (stream.headers["content-type"]) {
-      res.set("Content-Type", stream.headers["content-type"]);
-    } else {
-      res.set("Content-Type", "image/png");
-    }
-    if (stream.headers["content-length"]) {
-      res.set("Content-Length", stream.headers["content-length"]);
-    }
-
-    stream.pipe(res);
-  } catch (err) {
-    console.error("IMAGE PROXY ERROR:", err.message);
-    res.status(502).json({ message: "Failed to fetch image" });
   }
 });
 
