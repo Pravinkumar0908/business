@@ -5,41 +5,72 @@ const pool = require("../config/db");
 const { v4: uuidv4 } = require("uuid");
 const https = require("https");
 
-// ── Fetch product image from DuckDuckGo Instant Answer (free, no key) ──
-function fetchProductImage(productName) {
-  return new Promise((resolve) => {
-    const query = encodeURIComponent(productName + " product");
-    const url = `https://api.duckduckgo.com/?q=${query}&format=json&no_html=1&skip_disambig=1`;
-    https
-      .get(url, (res) => {
-        let data = "";
-        res.on("data", (chunk) => (data += chunk));
-        res.on("end", () => {
-          try {
-            const json = JSON.parse(data);
-            // Try main image → first topic icon → empty
-            const img =
-              json.Image ||
-              (json.RelatedTopics &&
-                json.RelatedTopics[0] &&
-                json.RelatedTopics[0].Icon &&
-                json.RelatedTopics[0].Icon.URL) ||
-              "";
-            // DuckDuckGo returns relative URLs sometimes
-            if (img && !img.startsWith("http")) {
-              resolve(img ? `https://duckduckgo.com${img}` : "");
-            } else {
-              resolve(img || "");
-            }
-          } catch {
-            resolve("");
-          }
-        });
-      })
-      .on("error", () => resolve(""));
-    // Timeout after 4 seconds
-    setTimeout(() => resolve(""), 4000);
+// ── Helper: https GET with promise ──
+function httpsGet(url, headers = {}) {
+  return new Promise((resolve, reject) => {
+    const req = https.get(url, { headers }, (res) => {
+      // Follow redirects
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        return httpsGet(res.headers.location, headers).then(resolve).catch(reject);
+      }
+      let data = "";
+      res.on("data", (chunk) => (data += chunk));
+      res.on("end", () => resolve(data));
+    });
+    req.on("error", reject);
+    req.setTimeout(5000, () => { req.destroy(); reject(new Error("timeout")); });
   });
+}
+
+// ── Fetch product image via DuckDuckGo Image Search (real images) ──
+async function fetchProductImage(productName) {
+  try {
+    const query = encodeURIComponent(productName + " product image");
+    // Step 1: Get vqd token from DuckDuckGo
+    const searchPage = await httpsGet(
+      `https://duckduckgo.com/?q=${query}&iax=images&ia=images`,
+      { "User-Agent": "Mozilla/5.0 (compatible; ProductBot/1.0)" }
+    );
+    const vqdMatch = searchPage.match(/vqd=['"]([^'"]+)['"]/);
+    if (!vqdMatch) {
+      console.log("DDG: vqd token not found, trying fallback...");
+      return await fetchImageFallback(productName);
+    }
+    const vqd = vqdMatch[1];
+
+    // Step 2: Fetch actual image results
+    const imgJson = await httpsGet(
+      `https://duckduckgo.com/i.js?l=us-en&o=json&q=${query}&vqd=${vqd}&f=,,,,,&p=1`,
+      { "User-Agent": "Mozilla/5.0 (compatible; ProductBot/1.0)" }
+    );
+    const parsed = JSON.parse(imgJson);
+    if (parsed.results && parsed.results.length > 0) {
+      // Pick the first image that's a real URL (https)
+      const img = parsed.results.find(r => r.image && r.image.startsWith("https"));
+      if (img) return img.image;
+      // Fallback to thumbnail
+      const thumb = parsed.results.find(r => r.thumbnail && r.thumbnail.startsWith("https"));
+      if (thumb) return thumb.thumbnail;
+    }
+    return await fetchImageFallback(productName);
+  } catch (e) {
+    console.log("DDG Image Search error:", e.message);
+    return await fetchImageFallback(productName);
+  }
+}
+
+// ── Fallback: DuckDuckGo Instant Answer ──
+async function fetchImageFallback(productName) {
+  try {
+    const query = encodeURIComponent(productName);
+    const data = await httpsGet(`https://api.duckduckgo.com/?q=${query}&format=json&no_html=1&skip_disambig=1`);
+    const json = JSON.parse(data);
+    let img = json.Image || "";
+    if (img && !img.startsWith("http")) img = `https://duckduckgo.com${img}`;
+    return img || "";
+  } catch {
+    return "";
+  }
 }
 
 // ── Auto-create table if not exists ──────────────────────
