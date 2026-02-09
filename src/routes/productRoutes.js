@@ -22,6 +22,24 @@ function httpsGet(url, headers = {}) {
   });
 }
 
+// ── Simple HTTP GET for proxy (supports http and https) ──
+const http = require("http");
+function httpGet(url, headers = {}) {
+  const mod = url.startsWith("https") ? https : http;
+  return new Promise((resolve, reject) => {
+    const req = mod.get(url, { headers }, (res) => {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        let loc = res.headers.location;
+        if (loc.startsWith('/')) { const u = new URL(url); loc = u.origin + loc; }
+        return httpGet(loc, headers).then(resolve).catch(reject);
+      }
+      resolve(res);
+    });
+    req.on("error", reject);
+    req.setTimeout(8000, () => { req.destroy(); reject(new Error("timeout")); });
+  });
+}
+
 // ── Fetch product image via DuckDuckGo Image Search (real images) ──
 async function fetchProductImage(productName) {
   try {
@@ -45,12 +63,16 @@ async function fetchProductImage(productName) {
     );
     const parsed = JSON.parse(imgJson);
     if (parsed.results && parsed.results.length > 0) {
-      // Pick the first image that's a real URL (https)
-      const img = parsed.results.find(r => r.image && r.image.startsWith("https"));
+      // Pick the first SOURCE image URL (skip duckduckgo.com proxy URLs - they cause CORS)
+      const isGoodUrl = (u) => u && u.startsWith("https") && !u.includes("duckduckgo.com");
+      const img = parsed.results.find(r => isGoodUrl(r.image));
       if (img) return img.image;
-      // Fallback to thumbnail
-      const thumb = parsed.results.find(r => r.thumbnail && r.thumbnail.startsWith("https"));
+      // Try thumbnail from non-DDG source
+      const thumb = parsed.results.find(r => isGoodUrl(r.thumbnail));
       if (thumb) return thumb.thumbnail;
+      // Last resort: any https image (will be proxied)
+      const any = parsed.results.find(r => r.image && r.image.startsWith("https"));
+      if (any) return any.image;
     }
     return await fetchImageFallback(productName);
   } catch (e) {
@@ -239,6 +261,36 @@ router.delete("/:id", auth, async (req, res) => {
   } catch (err) {
     console.error("DELETE PRODUCT ERROR:", err.message);
     res.status(500).json({ message: err.message });
+  }
+});
+
+// ── Image Proxy (avoids CORS issues on Flutter Web) ──
+router.get("/image-proxy", async (req, res) => {
+  try {
+    const imageUrl = req.query.url;
+    if (!imageUrl) return res.status(400).json({ message: "url parameter required" });
+
+    const stream = await httpGet(imageUrl, {
+      "User-Agent": "Mozilla/5.0 (compatible; ProductBot/1.0)",
+      "Accept": "image/*,*/*",
+    });
+
+    // Set CORS and content headers
+    res.set("Access-Control-Allow-Origin", "*");
+    res.set("Cache-Control", "public, max-age=86400"); // cache 24h
+    if (stream.headers["content-type"]) {
+      res.set("Content-Type", stream.headers["content-type"]);
+    } else {
+      res.set("Content-Type", "image/png");
+    }
+    if (stream.headers["content-length"]) {
+      res.set("Content-Length", stream.headers["content-length"]);
+    }
+
+    stream.pipe(res);
+  } catch (err) {
+    console.error("IMAGE PROXY ERROR:", err.message);
+    res.status(502).json({ message: "Failed to fetch image" });
   }
 });
 
