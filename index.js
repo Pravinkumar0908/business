@@ -40,6 +40,9 @@ app.use("/api/orders", require("./src/routes/orderRoutes"));
 // ✅ STAFF AUTH (PIN-based login, role management)
 app.use("/api/staff-auth", require("./src/routes/staffAuthRoutes"));
 
+// ✅ STAFF CREDENTIALS (email/password based staff management)
+app.use("/api/staff-credentials", require("./src/routes/staffCredentialRoutes"));
+
 // 404
 app.use((req, res) => {
   res.status(404).json({

@@ -47,7 +47,7 @@ exports.register = async (req, res) => {
     res.status(201).json({
       message: "Registration successful",
       token,
-      user: { id: userId, name, email, businessType: bizType }
+      user: { id: userId, name, email, role: 'owner', businessType: bizType, businessId: salonId, businessName: bizName }
     });
 
   } catch (err) {
@@ -67,7 +67,11 @@ exports.login = async (req, res) => {
     console.log("🔐 LOGIN: Looking up user with email:", email);
 
     const { rows } = await pool.query(
-      'SELECT u.id, u.name, u.password, u."salonId", s."businessType" FROM "User" u LEFT JOIN "Salon" s ON u."salonId" = s.id WHERE u.email = $1 LIMIT 1',
+      `SELECT u.id, u.name, u.password, u.role, u."salonId", u."staffRole", u.permissions, u."isActive",
+              s."businessType", s.name as "businessName"
+       FROM "User" u
+       LEFT JOIN "Salon" s ON u."salonId" = s.id
+       WHERE u.email = $1 LIMIT 1`,
       [email]
     );
 
@@ -77,7 +81,12 @@ exports.login = async (req, res) => {
     }
 
     const user = rows[0];
-    console.log("✅ LOGIN: User found, checking password");
+    console.log("✅ LOGIN: User found, role:", user.role, "checking password");
+
+    // Check if staff account is deactivated
+    if (user.role === 'staff' && user.isActive === false) {
+      return res.status(403).json({ message: "Your account has been deactivated. Contact your business owner." });
+    }
 
     const match = await bcrypt.compare(password, user.password);
 
@@ -94,12 +103,30 @@ exports.login = async (req, res) => {
       { expiresIn: "7d" }
     );
 
-    console.log("✅ LOGIN: Success, token generated");
+    // Parse permissions JSON
+    let permissions = [];
+    try {
+      permissions = user.permissions ? JSON.parse(user.permissions) : [];
+    } catch (e) {
+      permissions = [];
+    }
+
+    console.log("✅ LOGIN: Success, role=", user.role);
 
     res.json({
       message: "Login successful",
       token,
-      user: { id: user.id, name: user.name, email, businessType: user.businessType || 'salon' }
+      user: {
+        id: user.id,
+        name: user.name,
+        email,
+        role: user.role || 'owner',
+        staffRole: user.staffRole || null,
+        businessType: user.businessType || 'salon',
+        businessName: user.businessName || '',
+        businessId: user.salonId,
+        permissions: permissions,
+      }
     });
 
   } catch (err) {
