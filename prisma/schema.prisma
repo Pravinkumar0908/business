@@ -63,6 +63,15 @@ model Staff {
   baseSalary       Float?
   salonId          String
 
+  // ── Role-based auth fields ──
+  role             String   @default("staff")       // owner, manager, waiter, cashier, kitchen, staff
+  pinHash          String?                           // bcrypt hashed 4-6 digit PIN
+  permissions      String?                           // JSON array of permission strings
+  isActive         Boolean  @default(true)
+  lastLoginAt      DateTime?
+  failedAttempts   Int      @default(0)
+  lockedUntil      DateTime?
+
   salon     Salon      @relation(fields: [salonId], references: [id])
   items     SaleItem[]
   payrolls  Payroll[]
